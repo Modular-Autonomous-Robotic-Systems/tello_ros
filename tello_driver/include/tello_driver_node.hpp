@@ -7,8 +7,9 @@
 #include "tello_msgs/msg/flight_data.hpp"
 #include "tello_msgs/msg/tello_response.hpp"
 #include "tello_msgs/srv/tello_action.hpp"
-
+#include <std_msgs/msg/string.hpp>
 #include "h264decoder.hpp"
+#include "string"
 
 using asio::ip::udp;
 
@@ -45,13 +46,35 @@ namespace tello_driver
 
     ~TelloDriverNode();
 
+    enum class FlightState
+    {
+      landed,
+      taking_off,
+      flying,
+      landing,
+      low_battery,
+    };
+
+    std::map<FlightState, const char *> state_strs_{
+      {FlightState::landed,       "landed"},
+      {FlightState::taking_off,   "taking_off"},
+      {FlightState::flying,       "flying"},
+      {FlightState::landing,      "landing"},
+      {FlightState::low_battery, "low_battery"},
+    };
+
+    FlightState flight_state_ = FlightState::landed;
     // ROS publishers
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
     rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_pub_;
     rclcpp::Publisher<tello_msgs::msg::FlightData>::SharedPtr flight_data_pub_;
     rclcpp::Publisher<tello_msgs::msg::TelloResponse>::SharedPtr tello_response_pub_;
 
+    
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr tello_state_pub_;
   private:
+
+    void update_tello_state(FlightState next);
 
     void timer_callback();
 
@@ -75,6 +98,7 @@ namespace tello_driver
 
     // ROS timer
     rclcpp::TimerBase::SharedPtr spin_timer_;
+
   };
 
   //=====================================================================================

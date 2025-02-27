@@ -2,6 +2,8 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "sensor_msgs/msg/joy.hpp"
 #include "tello_msgs/srv/tello_action.hpp"
+#include "rclcpp_lifecycle/lifecycle_node.hpp"
+#include "rclcpp_lifecycle/lifecycle_publisher.hpp"
 
 namespace tello_joy
 {
@@ -18,20 +20,35 @@ namespace tello_joy
   constexpr int JOY_BUTTON_VIEW = 6;        // View button
   constexpr int JOY_BUTTON_MENU = 7;        // Menu button
 
-  class TelloJoyNode : public rclcpp::Node
+  class TelloJoyNode : public rclcpp_lifecycle::LifecycleNode
   {
   public:
 
     explicit TelloJoyNode(const rclcpp::NodeOptions &options);
 
     ~TelloJoyNode();
+    // Add lifecycle callbacks
+    rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+    on_configure(const rclcpp_lifecycle::State &previous_state) override;
+    
+    rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+    on_activate(const rclcpp_lifecycle::State &previous_state) override;
+    
+    rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+    on_deactivate(const rclcpp_lifecycle::State &previous_state) override;
+
+    rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+    on_cleanup(const rclcpp_lifecycle::State &previous_state) override;
+
+    rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+    on_shutdown(const rclcpp_lifecycle::State &previous_state) override;
 
   private:
 
     void joy_callback(const sensor_msgs::msg::Joy::SharedPtr joy_msg);
 
     rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_sub_;
-    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
+    rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
     rclcpp::Client<tello_msgs::srv::TelloAction>::SharedPtr tello_client_;
 
     // XBox One assignments
