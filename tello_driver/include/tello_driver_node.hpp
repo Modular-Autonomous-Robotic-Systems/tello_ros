@@ -48,22 +48,22 @@ namespace tello_driver
 
     enum class FlightState
     {
-      landed,
-      taking_off,
-      flying,
-      landing,
-      low_battery,
+      Landed,
+      TakingOff,
+      Flying,
+      Landing,
+      LowBattery,
     };
 
     std::map<FlightState, const char *> state_strs_{
-      {FlightState::landed,       "landed"},
-      {FlightState::taking_off,   "taking_off"},
-      {FlightState::flying,       "flying"},
-      {FlightState::landing,      "landing"},
-      {FlightState::low_battery, "low_battery"},
+      {FlightState::Landed,       "landed"},
+      {FlightState::TakingOff,   "taking_off"},
+      {FlightState::Flying,       "flying"},
+      {FlightState::Landing,      "landing"},
+      {FlightState::LowBattery, "low_battery"},
     };
 
-    FlightState flight_state_ = FlightState::landed;
+    FlightState flight_state_ = FlightState::Landed;
     // ROS publishers
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
     rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_pub_;

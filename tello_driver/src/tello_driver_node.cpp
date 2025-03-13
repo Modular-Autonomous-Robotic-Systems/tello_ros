@@ -43,7 +43,6 @@ namespace tello_driver
   TelloDriverNode::TelloDriverNode(const rclcpp::NodeOptions &options) :
     Node("tello_driver", options)
   {
-
     // ROS publishers
     image_pub_ = create_publisher<sensor_msgs::msg::Image>("image_raw", 1);
     camera_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", rclcpp::SensorDataQoS());
@@ -101,14 +100,13 @@ namespace tello_driver
       RCLCPP_WARN(get_logger(), "Busy, dropping '%s'", request->cmd.c_str());
       response->rc = response->ERROR_BUSY;
     } else {
-
       command_socket_->initiate_command(request->cmd, true);
-      if (request->cmd == "takeoff" && flight_state_ == FlightState::landed) {
-        update_tello_state(FlightState::taking_off);
-      } else if (request->cmd == "land" && flight_state_== FlightState::flying) {
-        update_tello_state(FlightState::landing);
+      if (request->cmd == "takeoff" && flight_state_ == FlightState::Landed) {
+        update_tello_state(FlightState::TakingOff);
+      } else if (request->cmd == "land" && flight_state_== FlightState::Flying) {
+        update_tello_state(FlightState::Landing);
       } else {
-        
+        RCLCPP_ERROR(get_logger(), "Request to '%s' from '%s' are not valid request", request->cmd.c_str(),state_strs_[flight_state_]);
       }
       
       response->rc = response->OK;
@@ -194,20 +192,20 @@ namespace tello_driver
       // add error handling
       flight_state_ = next;
       switch (next) {
-        case FlightState::landed:
+        case FlightState::Landed:
             RCLCPP_INFO(get_logger(), "Landing successfull...");
             break;
-        case FlightState::taking_off:
+        case FlightState::TakingOff:
             RCLCPP_INFO(get_logger(), "Taking off is successfull, Drone is currently flying");
-            flight_state_ = FlightState::flying;
+            flight_state_ = FlightState::Flying;
             break;
-        case FlightState::flying:
+        case FlightState::Flying:
             break;
-        case FlightState::landing:
-            flight_state_ = FlightState::landed;
+        case FlightState::Landing:
+            flight_state_ = FlightState::Landed;
             RCLCPP_INFO(get_logger(), "Landing successfull...");
             break;
-        case FlightState::low_battery:
+        case FlightState::LowBattery:
             RCLCPP_INFO(get_logger(), "Low battery, Please substitute the battery");
             break;
       }
