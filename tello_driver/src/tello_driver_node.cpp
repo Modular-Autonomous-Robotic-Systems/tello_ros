@@ -43,6 +43,7 @@ namespace tello_driver
   TelloDriverNode::TelloDriverNode(const rclcpp::NodeOptions &options) :
     Node("tello_driver", options)
   {
+
     // ROS publishers
     image_pub_ = create_publisher<sensor_msgs::msg::Image>("image_raw", 1);
     camera_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", rclcpp::SensorDataQoS());
@@ -58,6 +59,7 @@ namespace tello_driver
     cmd_vel_sub_ = create_subscription<geometry_msgs::msg::Twist>(
       "cmd_vel", 1, std::bind(&TelloDriverNode::cmd_vel_callback, this, std::placeholders::_1));
 
+    tello_state_pub_ = create_publisher<std_msgs::msg::String>("tello_state", 1);
     // ROS timer
     using namespace std::chrono_literals;
     spin_timer_ = create_wall_timer(1s, std::bind(&TelloDriverNode::timer_callback, this));
@@ -99,8 +101,18 @@ namespace tello_driver
       RCLCPP_WARN(get_logger(), "Busy, dropping '%s'", request->cmd.c_str());
       response->rc = response->ERROR_BUSY;
     } else {
+
       command_socket_->initiate_command(request->cmd, true);
+      if (request->cmd == "takeoff" && flight_state_ == FlightState::landed) {
+        update_tello_state(FlightState::taking_off);
+      } else if (request->cmd == "land" && flight_state_== FlightState::flying) {
+        update_tello_state(FlightState::landing);
+      } else {
+        
+      }
+      
       response->rc = response->OK;
+
     }
   }
 
@@ -175,6 +187,34 @@ namespace tello_driver
     }
   }
 
+  
+  void TelloDriverNode::update_tello_state(FlightState next)
+    {
+      
+      // add error handling
+      flight_state_ = next;
+      switch (next) {
+        case FlightState::landed:
+            RCLCPP_INFO(get_logger(), "Landing successfull...");
+            break;
+        case FlightState::taking_off:
+            RCLCPP_INFO(get_logger(), "Taking off is successfull, Drone is currently flying");
+            flight_state_ = FlightState::flying;
+            break;
+        case FlightState::flying:
+            break;
+        case FlightState::landing:
+            flight_state_ = FlightState::landed;
+            RCLCPP_INFO(get_logger(), "Landing successfull...");
+            break;
+        case FlightState::low_battery:
+            RCLCPP_INFO(get_logger(), "Low battery, Please substitute the battery");
+            break;
+      }
+      auto message = std_msgs::msg::String();
+      message.data = state_strs_[flight_state_];
+      tello_state_pub_->publish(message);
+    }
 } // namespace tello_driver
 
 #include "rclcpp_components/register_node_macro.hpp"
