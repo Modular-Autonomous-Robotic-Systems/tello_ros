@@ -48,6 +48,7 @@ namespace tello_driver
 
     enum class FlightState
     {
+	  Idle,
       Landed,
       TakingOff,
       Flying,
@@ -56,6 +57,7 @@ namespace tello_driver
     };
 
     std::map<FlightState, const char *> state_strs_{
+      {FlightState::Idle,       "idle"},
       {FlightState::Landed,       "landed"},
       {FlightState::TakingOff,   "taking_off"},
       {FlightState::Flying,       "flying"},
@@ -63,7 +65,8 @@ namespace tello_driver
       {FlightState::LowBattery, "low_battery"},
     };
 
-    FlightState flight_state_ = FlightState::Landed;
+    FlightState flight_state_ = FlightState::Idle;
+	FlightState mpPrevFlightState = FlightState::Idle;
     // ROS publishers
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
     rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_pub_;
@@ -84,6 +87,7 @@ namespace tello_driver
       std::shared_ptr<tello_msgs::srv::TelloAction::Response> response);
 
     void cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg);
+	void tello_response_callback(const tello_msgs::msg::TelloResponse::SharedPtr msg);
 
     // Sockets
     std::unique_ptr<CommandSocket> command_socket_;
@@ -95,9 +99,13 @@ namespace tello_driver
 
     // ROS subscriptions
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
+	rclcpp::Subscription<tello_msgs::msg::TelloResponse>::SharedPtr tello_response_sub_;
 
     // ROS timer
     rclcpp::TimerBase::SharedPtr spin_timer_;
+
+	std::string last_requested_command_;
+	std::mutex mtx_;
 
   };
 

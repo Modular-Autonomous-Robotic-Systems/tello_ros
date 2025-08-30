@@ -58,6 +58,8 @@ namespace tello_joy
     const int joy_axis_yaw_ = JOY_AXIS_LEFT_LR;
     const int joy_button_takeoff_ = JOY_BUTTON_MENU;
     const int joy_button_land_ = JOY_BUTTON_VIEW;
+
+	std::string mpDroneName;
   };
 
 } // namespace tello_joy

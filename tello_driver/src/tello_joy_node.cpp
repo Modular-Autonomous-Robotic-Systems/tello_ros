@@ -12,7 +12,10 @@ namespace tello_joy
   TelloJoyNode::TelloJoyNode(const rclcpp::NodeOptions &options) :
     rclcpp_lifecycle::LifecycleNode("tello_joy", options)
   {
-
+	  rcl_interfaces::msg::ParameterDescriptor droneNameDesc;
+	  droneNameDesc.description = "Path to output file for received video";
+	  droneNameDesc.type = 4;
+	  this->declare_parameter<std::string>("drone_name", "drone1", droneNameDesc);
   }
   
   TelloJoyNode::~TelloJoyNode()
@@ -23,12 +26,16 @@ namespace tello_joy
   {
     RCLCPP_INFO(get_logger(), "Configuring TelloJoy node...");
     
+	mpDroneName = this->get_parameter("drone_name").as_string();
+
     using std::placeholders::_1;
     joy_sub_ = create_subscription<sensor_msgs::msg::Joy>(
       "joy", 1, 
       std::bind(&TelloJoyNode::joy_callback, this, _1));
       
-    cmd_vel_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 1);
+
+	std::string cmdVelTopic = "/" + mpDroneName + "/cmd_vel";
+    cmd_vel_pub_ = create_publisher<geometry_msgs::msg::Twist>(cmdVelTopic, 1);
 
     tello_client_ = create_client<tello_msgs::srv::TelloAction>("tello_action");
 

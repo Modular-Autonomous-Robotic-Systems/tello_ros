@@ -21,7 +21,7 @@ int main(int argc, char **argv)
   // Create and add joy node
   auto joy_node = std::make_shared<tello_joy::TelloJoyNode>(options);
   executor.add_node(joy_node->get_node_base_interface());
-  joy_node->configure();
+  // joy_node->configure();
   // Spin until rclcpp::ok() returns false
   executor.spin();
 

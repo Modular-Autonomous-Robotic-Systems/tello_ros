@@ -8,211 +8,249 @@ namespace tello_driver
 {
 
 #define TELLO_DRIVER_ALL_PARAMS \
-  CXT_MACRO_MEMBER(               /* Send commands to this IP address */ \
-  drone_ip, \
-  std::string, std::string("192.168.10.1")) \
-  CXT_MACRO_MEMBER(               /* Send commands to this port */ \
-  drone_port, \
-  int, 8889) \
-  CXT_MACRO_MEMBER(               /* Send commands from this port */ \
-  command_port, \
-  int, 38065) \
-  CXT_MACRO_MEMBER(               /* Flight data will arrive at this port */ \
-  data_port, \
-  int, 8890) \
-  CXT_MACRO_MEMBER(               /* Video data will arrive at this port */ \
-  video_port, \
-  int, 11111) \
-  CXT_MACRO_MEMBER(               /* Camera calibration path */ \
-  camera_info_path, \
-  std::string, "install/tello_driver/share/tello_driver/cfg/camera_info.yaml") \
-  /* End of list */
+CXT_MACRO_MEMBER(               /* Send commands to this IP address */ \
+		drone_ip, \
+		std::string, std::string("192.168.10.1")) \
+CXT_MACRO_MEMBER(               /* Send commands to this port */ \
+		drone_port, \
+		int, 8889) \
+CXT_MACRO_MEMBER(               /* Send commands from this port */ \
+		command_port, \
+		int, 38065) \
+CXT_MACRO_MEMBER(               /* Flight data will arrive at this port */ \
+		data_port, \
+		int, 8890) \
+CXT_MACRO_MEMBER(               /* Video data will arrive at this port */ \
+		video_port, \
+		int, 11111) \
+CXT_MACRO_MEMBER(               /* Camera calibration path */ \
+		camera_info_path, \
+		std::string, "install/tello_driver/share/tello_driver/cfg/camera_info.yaml") \
+/* End of list */
 
-  struct TelloDriverContext
-  {
+struct TelloDriverContext
+{
 #undef CXT_MACRO_MEMBER
 #define CXT_MACRO_MEMBER(n, t, d) CXT_MACRO_DEFINE_MEMBER(n, t, d)
-    CXT_MACRO_DEFINE_MEMBERS(TELLO_DRIVER_ALL_PARAMS)
-  };
+	CXT_MACRO_DEFINE_MEMBERS(TELLO_DRIVER_ALL_PARAMS)
+};
 
-  constexpr int32_t STATE_TIMEOUT = 4;      // We stopped receiving telemetry
-  constexpr int32_t VIDEO_TIMEOUT = 4;      // We stopped receiving video
-  constexpr int32_t KEEP_ALIVE = 12;        // We stopped receiving input from other ROS nodes
-  constexpr int32_t COMMAND_TIMEOUT = 9;    // Drone didn't respond to a command
+constexpr int32_t STATE_TIMEOUT = 4;      // We stopped receiving telemetry
+constexpr int32_t VIDEO_TIMEOUT = 4;      // We stopped receiving video
+constexpr int32_t KEEP_ALIVE = 12;        // We stopped receiving input from other ROS nodes
+constexpr int32_t COMMAND_TIMEOUT = 9;    // Drone didn't respond to a command
 
-  TelloDriverNode::TelloDriverNode(const rclcpp::NodeOptions &options) :
-    Node("tello_driver", options)
-  {
-    // ROS publishers
-    image_pub_ = create_publisher<sensor_msgs::msg::Image>("image_raw", 1);
-    camera_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", rclcpp::SensorDataQoS());
-    flight_data_pub_ = create_publisher<tello_msgs::msg::FlightData>("flight_data", 1);
-    tello_response_pub_ = create_publisher<tello_msgs::msg::TelloResponse>("tello_response", 1);
+TelloDriverNode::TelloDriverNode(const rclcpp::NodeOptions &options) :
+	Node("tello_driver", options)
+{
+	// ROS publishers
+	image_pub_ = create_publisher<sensor_msgs::msg::Image>("image_raw", 1);
+	camera_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", rclcpp::SensorDataQoS());
+	flight_data_pub_ = create_publisher<tello_msgs::msg::FlightData>("flight_data", 1);
+	tello_response_pub_ = create_publisher<tello_msgs::msg::TelloResponse>("tello_response", 1);
 
-    // ROS service
-    command_srv_ = create_service<tello_msgs::srv::TelloAction>(
-      "tello_action", std::bind(&TelloDriverNode::command_callback, this,
-                                std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+	// ROS service
+	command_srv_ = create_service<tello_msgs::srv::TelloAction>(
+			"tello_action", std::bind(&TelloDriverNode::command_callback, this,
+				std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
-    // ROS subscription
-    cmd_vel_sub_ = create_subscription<geometry_msgs::msg::Twist>(
-      "cmd_vel", 1, std::bind(&TelloDriverNode::cmd_vel_callback, this, std::placeholders::_1));
+	// ROS subscription
+	cmd_vel_sub_ = create_subscription<geometry_msgs::msg::Twist>(
+			"cmd_vel",
+			1,
+			std::bind(&TelloDriverNode::cmd_vel_callback, this, std::placeholders::_1));
+	tello_response_sub_ = create_subscription<tello_msgs::msg::TelloResponse>(
+			"tello_response",
+			1,
+			std::bind(&TelloDriverNode::tello_response_callback, this, std::placeholders::_1));
 
-    tello_state_pub_ = create_publisher<std_msgs::msg::String>("tello_state", 1);
-    // ROS timer
-    using namespace std::chrono_literals;
-    spin_timer_ = create_wall_timer(1s, std::bind(&TelloDriverNode::timer_callback, this));
+	tello_state_pub_ = create_publisher<std_msgs::msg::String>("tello_state", 1);
+	// ROS timer
+	using namespace std::chrono_literals;
+	spin_timer_ = create_wall_timer(1s, std::bind(&TelloDriverNode::timer_callback, this));
 
-    // Parameters - Allocate the parameter context as a local variable because it is not used outside this routine
-    TelloDriverContext cxt{};
+	// Parameters - Allocate the parameter context as a local variable because it is not used outside this routine
+	TelloDriverContext cxt{};
 #undef CXT_MACRO_MEMBER
 #define CXT_MACRO_MEMBER(n, t, d) CXT_MACRO_LOAD_PARAMETER((*this), cxt, n, t, d)
-    CXT_MACRO_INIT_PARAMETERS(TELLO_DRIVER_ALL_PARAMS, [this]()
-    {})
+	CXT_MACRO_INIT_PARAMETERS(TELLO_DRIVER_ALL_PARAMS, [this]()
+			{})
 
-    // NOTE: This is not setup to dynamically update parameters after ths node is running.
+	// NOTE: This is not setup to dynamically update parameters after ths node is running.
 
-    RCLCPP_INFO(get_logger(), "Drone at %s:%d", cxt.drone_ip_.c_str(), cxt.drone_port_);
-    RCLCPP_INFO(get_logger(), "Listening for command responses on localhost:%d", cxt.command_port_);
-    RCLCPP_INFO(get_logger(), "Listening for data on localhost:%d", cxt.data_port_);
-    RCLCPP_INFO(get_logger(), "Listening for video on localhost:%d", cxt.video_port_);
+	RCLCPP_INFO(get_logger(), "Drone at %s:%d", cxt.drone_ip_.c_str(), cxt.drone_port_);
+	RCLCPP_INFO(get_logger(), "Listening for command responses on localhost:%d", cxt.command_port_);
+	RCLCPP_INFO(get_logger(), "Listening for data on localhost:%d", cxt.data_port_);
+	RCLCPP_INFO(get_logger(), "Listening for video on localhost:%d", cxt.video_port_);
 
-    // Sockets
-    command_socket_ = std::make_unique<CommandSocket>(this, cxt.drone_ip_, cxt.drone_port_, cxt.command_port_);
-    state_socket_ = std::make_unique<StateSocket>(this, cxt.data_port_);
-    video_socket_ = std::make_unique<VideoSocket>(this, cxt.video_port_, cxt.camera_info_path_);
-  }
+	// Sockets
+	command_socket_ = std::make_unique<CommandSocket>(this, cxt.drone_ip_, cxt.drone_port_, cxt.command_port_);
+	state_socket_ = std::make_unique<StateSocket>(this, cxt.data_port_);
+	video_socket_ = std::make_unique<VideoSocket>(this, cxt.video_port_, cxt.camera_info_path_);
+}
 
-  TelloDriverNode::~TelloDriverNode()
-  {
-  }
+TelloDriverNode::~TelloDriverNode()
+{
+}
 
-  void TelloDriverNode::command_callback(
-    const std::shared_ptr<rmw_request_id_t> request_header,
-    const std::shared_ptr<tello_msgs::srv::TelloAction::Request> request,
-    std::shared_ptr<tello_msgs::srv::TelloAction::Response> response)
-  {
-    (void) request_header;
-    if (!state_socket_->receiving() || !video_socket_->receiving()) {
-      RCLCPP_WARN(get_logger(), "Not connected, dropping '%s'", request->cmd.c_str());
-      response->rc = response->ERROR_NOT_CONNECTED;
-    } else if (command_socket_->waiting()) {
-      RCLCPP_WARN(get_logger(), "Busy, dropping '%s'", request->cmd.c_str());
-      response->rc = response->ERROR_BUSY;
-    } else {
-      command_socket_->initiate_command(request->cmd, true);
-      if (request->cmd == "takeoff" && flight_state_ == FlightState::Landed) {
-        update_tello_state(FlightState::TakingOff);
-      } else if (request->cmd == "land" && flight_state_== FlightState::Flying) {
-        update_tello_state(FlightState::Landing);
-      } else {
-        RCLCPP_ERROR(get_logger(), "Request to '%s' from '%s' are not valid request", request->cmd.c_str(),state_strs_[flight_state_]);
-      }
-      
-      response->rc = response->OK;
+void TelloDriverNode::command_callback(
+		const std::shared_ptr<rmw_request_id_t> request_header,
+		const std::shared_ptr<tello_msgs::srv::TelloAction::Request> request,
+		std::shared_ptr<tello_msgs::srv::TelloAction::Response> response)
+{
+	(void) request_header;
+	if (!state_socket_->receiving() || !video_socket_->receiving()) {
+		RCLCPP_WARN(get_logger(), "Not connected, dropping '%s'", request->cmd.c_str());
+		response->rc = response->ERROR_NOT_CONNECTED;
+	} else if (command_socket_->waiting()) {
+		RCLCPP_WARN(get_logger(), "Busy, dropping '%s'", request->cmd.c_str());
+		response->rc = response->ERROR_BUSY;
+	} else {
+		last_requested_command_ = request->cmd;
+		command_socket_->initiate_command(request->cmd, true);
+		if (request->cmd == "takeoff" && (flight_state_ == FlightState::Landed || flight_state_ == FlightState::Idle || flight_state_ == FlightState::TakingOff)) {
+			update_tello_state(FlightState::TakingOff);
+		} else if (request->cmd == "land" && (flight_state_== FlightState::Flying  || flight_state_ == FlightState::Landing)) {
+			update_tello_state(FlightState::Landing);
+		} else {
+			RCLCPP_ERROR(get_logger(), "Request to '%s' from '%s' are not valid request", request->cmd.c_str(),state_strs_[flight_state_]);
+		}
 
-    }
-  }
+		response->rc = response->OK;
 
-  void TelloDriverNode::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg)
-  {
-    // TODO cmd_vel should specify velocity, not joystick position
-    if (!command_socket_->waiting()) {
-      std::ostringstream rc;
-      rc << "rc " << static_cast<int>(round(msg->linear.y * -100))
-         << " " << static_cast<int>(round(msg->linear.x * 100))
-         << " " << static_cast<int>(round(msg->linear.z * 100))
-         << " " << static_cast<int>(round(msg->angular.z * -100));
-      command_socket_->initiate_command(rc.str(), false);
-    }
-  }
+	}
+}
 
-  // Do work every second
-  void TelloDriverNode::timer_callback()
-  {
-    //====
-    // Startup
-    //====
+void TelloDriverNode::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg)
+{
+	// TODO cmd_vel should specify velocity, not joystick position
+	if (!command_socket_->waiting()) {
+		std::ostringstream rc;
+		rc << "rc " << static_cast<int>(round(msg->linear.y * -100))
+			<< " " << static_cast<int>(round(msg->linear.x * 100))
+			<< " " << static_cast<int>(round(msg->linear.z * 100))
+			<< " " << static_cast<int>(round(msg->angular.z * -100));
+		command_socket_->initiate_command(rc.str(), false);
+	}
+}
 
-    if (!state_socket_->receiving() && !command_socket_->waiting()) {
-      // First command to the drone must be "command"
-      command_socket_->initiate_command("command", false);
-      return;
-    }
+// Do work every second
+void TelloDriverNode::timer_callback()
+{
+	//====
+	// Startup
+	//====
 
-    if (state_socket_->receiving() && !video_socket_->receiving() && !command_socket_->waiting()) {
-      // Start video
-      command_socket_->initiate_command("streamon", false);
-      return;
-    }
+	if (!state_socket_->receiving() && !command_socket_->waiting()) {
+		// First command to the drone must be "command"
+		command_socket_->initiate_command("command", false);
+		return;
+	}
 
-    //====
-    // Timeouts
-    //====
+	if (state_socket_->receiving() && !video_socket_->receiving() && !command_socket_->waiting()) {
+		// Start video
+		command_socket_->initiate_command("streamon", false);
+		return;
+	}
 
-    bool timeout = false;
+	//====
+	// Timeouts
+	//====
 
-    if (command_socket_->waiting() && now() - command_socket_->send_time() > rclcpp::Duration(COMMAND_TIMEOUT, 0)) {
-      RCLCPP_ERROR(get_logger(), "Command timed out");
-      command_socket_->timeout();
-      timeout = true;
-    }
+	bool timeout = false;
 
-    if (state_socket_->receiving() && now() - state_socket_->receive_time() > rclcpp::Duration(STATE_TIMEOUT, 0)) {
-      RCLCPP_ERROR(get_logger(), "No state received for 5s");
-      state_socket_->timeout();
-      timeout = true;
-    }
+	if (command_socket_->waiting() && now() - command_socket_->send_time() > rclcpp::Duration(COMMAND_TIMEOUT, 0)) {
+		RCLCPP_ERROR(get_logger(), "Command timed out");
+		command_socket_->timeout();
+		timeout = true;
+	}
 
-    if (video_socket_->receiving() && now() - video_socket_->receive_time() > rclcpp::Duration(VIDEO_TIMEOUT, 0)) {
-      RCLCPP_ERROR(get_logger(), "No video received for 5s");
-      video_socket_->timeout();
-      timeout = true;
-    }
+	if (state_socket_->receiving() && now() - state_socket_->receive_time() > rclcpp::Duration(STATE_TIMEOUT, 0)) {
+		RCLCPP_ERROR(get_logger(), "No state received for 5s");
+		state_socket_->timeout();
+		timeout = true;
+	}
 
-    if (timeout) {
-      return;
-    }
+	if (video_socket_->receiving() && now() - video_socket_->receive_time() > rclcpp::Duration(VIDEO_TIMEOUT, 0)) {
+		RCLCPP_ERROR(get_logger(), "No video received for 5s");
+		video_socket_->timeout();
+		timeout = true;
+	}
 
-    //====
-    // Keep-alive, drone will auto-land if it hears nothing for 15s
-    //====
+	if (timeout) {
+		return;
+	}
 
-    if (state_socket_->receiving() && video_socket_->receiving() && !command_socket_->waiting() &&
-        now() - command_socket_->send_time() > rclcpp::Duration(KEEP_ALIVE, 0)) {
-      command_socket_->initiate_command("rc 0 0 0 0", false);
-      return;
-    }
-  }
+	//====
+	// Keep-alive, drone will auto-land if it hears nothing for 15s
+	//====
 
-  
-  void TelloDriverNode::update_tello_state(FlightState next)
-    {
-      
-      // add error handling
-      flight_state_ = next;
-      switch (next) {
-        case FlightState::Landed:
-            RCLCPP_INFO(get_logger(), "Landing successfull...");
-            break;
-        case FlightState::TakingOff:
-            RCLCPP_INFO(get_logger(), "Taking off is successfull, Drone is currently flying");
-            flight_state_ = FlightState::Flying;
-            break;
-        case FlightState::Flying:
-            break;
-        case FlightState::Landing:
-            flight_state_ = FlightState::Landed;
-            RCLCPP_INFO(get_logger(), "Landing successfull...");
-            break;
-        case FlightState::LowBattery:
-            RCLCPP_INFO(get_logger(), "Low battery, Please substitute the battery");
-            break;
-      }
-      auto message = std_msgs::msg::String();
-      message.data = state_strs_[flight_state_];
-      tello_state_pub_->publish(message);
-    }
+	if (state_socket_->receiving() && video_socket_->receiving() && !command_socket_->waiting() &&
+			now() - command_socket_->send_time() > rclcpp::Duration(KEEP_ALIVE, 0)) {
+		command_socket_->initiate_command("rc 0 0 0 0", false);
+		return;
+	}
+}
+
+
+void TelloDriverNode::update_tello_state(FlightState next)
+{
+
+	// add error handling
+	std::lock_guard<std::mutex> lock(mtx_);
+	mpPrevFlightState = flight_state_;
+	flight_state_ = next;
+	switch (next) {
+		case FlightState::TakingOff:
+			RCLCPP_INFO(get_logger(), "Taking off is successfull, Drone will start flying soon");
+			flight_state_ = FlightState::TakingOff;
+			break;
+		case FlightState::Flying:
+			flight_state_ = FlightState::Flying;
+			RCLCPP_INFO(get_logger(), "Drone is flying now");
+			break;
+		case FlightState::Landing:
+			flight_state_ = FlightState::Landing;
+			RCLCPP_INFO(get_logger(), "Attempting Landing...");
+			break;
+		case FlightState::Landed:
+			flight_state_ = FlightState::Landed;
+			RCLCPP_INFO(get_logger(), "Landed successfull...");
+			break;
+		case FlightState::LowBattery:
+			RCLCPP_INFO(get_logger(), "Low battery, Please substitute the battery");
+			break;
+	}
+	auto message = std_msgs::msg::String();
+	message.data = state_strs_[flight_state_];
+	tello_state_pub_->publish(message);
+}
+
+void TelloDriverNode::tello_response_callback(const tello_msgs::msg::TelloResponse::SharedPtr msg){
+	if(msg->rc == 1){
+		if(last_requested_command_ == "takeoff"){
+			update_tello_state(FlightState::Flying);
+		}
+		else if(last_requested_command_ == "land"){
+			update_tello_state(FlightState::Landed);
+		}
+		last_requested_command_ = "";
+	}
+	else if(msg->rc == 2){
+		RCLCPP_WARN(
+			this->get_logger(),
+			"error in processing command. received response: %s",
+			msg->str);
+	}
+	else if(msg->rc == 3){
+		RCLCPP_WARN(
+			this->get_logger(),
+			"timeout when running command %s. received response: %s",
+			last_requested_command_.c_str(),
+			msg->str.c_str());
+	}
+}
+
 } // namespace tello_driver
 
 #include "rclcpp_components/register_node_macro.hpp"
